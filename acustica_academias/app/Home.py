@@ -12,20 +12,56 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from impactosea import (  # noqa: E402
-    CONCRETE_SLAB_DENSITY_KG_M3,
-    CONCRETE_SLAB_POISSON_RATIO,
-    CONCRETE_SLAB_YOUNG_MODULUS_PA,
-    FeasibilityInput,
-    ProjectInput,
-    assess_feasibility,
-    build_ads_markdown,
-    calculate_scenario,
-    estimate_original_contact_time,
-    load_solutions,
-)
-from impactosea.constants import G_CURVES, IMPACT_BANDS_HZ, TARGET_G_OPTIONS  # noqa: E402
-from impactosea.engine import contact_cutoff_hz, scenario_to_records, validate_h3_case  # noqa: E402
+try:
+    from impactosea import (  # noqa: E402
+        FeasibilityInput,
+        ProjectInput,
+        assess_feasibility,
+        build_ads_markdown,
+        calculate_scenario,
+        load_solutions,
+    )
+    from impactosea.constants import (  # noqa: E402
+        CONCRETE_SLAB_DENSITY_KG_M3,
+        CONCRETE_SLAB_POISSON_RATIO,
+        CONCRETE_SLAB_YOUNG_MODULUS_PA,
+        G_CURVES,
+        IMPACT_BANDS_HZ,
+        TARGET_G_OPTIONS,
+    )
+    from impactosea.engine import (  # noqa: E402
+        contact_cutoff_hz,
+        estimate_original_contact_time,
+        scenario_to_records,
+        validate_h3_case,
+    )
+except ImportError:
+    # Streamlit Cloud can rerun after a Git pull with stale local modules loaded.
+    for module_name in tuple(sys.modules):
+        if module_name == "impactosea" or module_name.startswith("impactosea."):
+            sys.modules.pop(module_name, None)
+    from impactosea import (  # noqa: E402
+        FeasibilityInput,
+        ProjectInput,
+        assess_feasibility,
+        build_ads_markdown,
+        calculate_scenario,
+        load_solutions,
+    )
+    from impactosea.constants import (  # noqa: E402
+        CONCRETE_SLAB_DENSITY_KG_M3,
+        CONCRETE_SLAB_POISSON_RATIO,
+        CONCRETE_SLAB_YOUNG_MODULUS_PA,
+        G_CURVES,
+        IMPACT_BANDS_HZ,
+        TARGET_G_OPTIONS,
+    )
+    from impactosea.engine import (  # noqa: E402
+        contact_cutoff_hz,
+        estimate_original_contact_time,
+        scenario_to_records,
+        validate_h3_case,
+    )
 
 
 st.set_page_config(
