@@ -1,0 +1,92 @@
+{
+  "version": "2026-05-12",
+  "reference": "ProPG/GAG 2023; catalog values are preliminary design assumptions unless supplier test data is attached.",
+  "solutions": [
+    {
+      "id": "rubber_tile_30mm",
+      "name": "Borracha técnica 30 mm sobre laje",
+      "summary": "Solução mínima para reduzir contato rígido e controlar parte do conteúdo médio-agudo. Não deve ser tratada como piso flutuante completo para pesos livres severos.",
+      "layers": [
+        {
+          "material": "Piso de borracha técnica alta densidade",
+          "thickness_mm": 30,
+          "role": "superfície de impacto"
+        }
+      ],
+      "tc_mitigated_ms": 7.0,
+      "fn_hz": 18.0,
+      "zeta": 0.12,
+      "cap_db": 10.0,
+      "source": "Premissa de triagem baseada em aumento de tempo de contato; substituir por ensaio do fornecedor.",
+      "validity": "Uso preliminar para impacto moderado; não indicado como solução final para LPO, CrossFit ou dormitórios adjacentes sem ensaio.",
+      "uncertainty": [
+        "A rigidez dinâmica da borracha varia com carga, envelhecimento e temperatura.",
+        "Pode ocorrer fim de curso em impactos concentrados."
+      ]
+    },
+    {
+      "id": "eva_40mm_spring_6hz",
+      "name": "EVA 40 mm + piso flutuante 6 Hz",
+      "summary": "Sistema misto que separa o amaciamento do contato e a redução estrutural por massa-mola-amortecedor.",
+      "layers": [
+        {
+          "material": "Camada superior em EVA ou elastômero espesso",
+          "thickness_mm": 40,
+          "role": "superfície deformável"
+        },
+        {
+          "material": "Plataforma rígida de distribuição de carga",
+          "thickness_mm": 40,
+          "role": "massa distribuída"
+        },
+        {
+          "material": "Apoios resilientes/molas calibradas",
+          "thickness_mm": 50,
+          "role": "desacoplamento estrutural"
+        }
+      ],
+      "tc_mitigated_ms": 12.0,
+      "fn_hz": 6.0,
+      "zeta": 0.08,
+      "cap_db": 24.0,
+      "source": "Premissa alinhada ao estudo do notebook e aos benchmarks de pisos resilientes do ProPG/GAG.",
+      "validity": "Triagem para áreas de peso livre; exige mock-up e verificação de flanqueamento antes da especificação final.",
+      "uncertainty": [
+        "Tc é estimado e deve ser calibrado com queda real no sistema.",
+        "O cap de 24 dB limita a predição para evitar superestimação da atenuação."
+      ]
+    },
+    {
+      "id": "sprung_floor_4hz_rubber_50mm",
+      "name": "Piso flutuante 4 Hz + borracha 50 mm",
+      "summary": "Solução robusta para reduzir transmissão estrutural em baixas frequências, inspirada nos sistemas de piso com mola e borracha avaliados em estudos de caso.",
+      "layers": [
+        {
+          "material": "Borracha técnica com geometria resiliente",
+          "thickness_mm": 50,
+          "role": "superfície de impacto"
+        },
+        {
+          "material": "Tablado/plataforma pesada de distribuição",
+          "thickness_mm": 60,
+          "role": "massa do piso flutuante"
+        },
+        {
+          "material": "Sistema de molas ou apoios resilientes de baixa frequência",
+          "thickness_mm": 75,
+          "role": "isolamento estrutural"
+        }
+      ],
+      "tc_mitigated_ms": 14.0,
+      "fn_hz": 4.0,
+      "zeta": 0.08,
+      "cap_db": 24.0,
+      "source": "Benchmark preliminar compatível com reduções globais de 23-24 dB(A) observadas em sistemas de piso flutuante no GAG.",
+      "validity": "Candidato para cenários severos, condicionado a verificação estrutural, detalhe executivo e ensaio de amostra.",
+      "uncertainty": [
+        "Sistemas de baixa frequência são sensíveis a pontes rígidas e sobrecargas.",
+        "A resposta real pode ser dominada por flancos abaixo de 100 Hz."
+      ]
+    }
+  ]
+}
