@@ -10,12 +10,19 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from impactosea.catalog import load_solutions
-from impactosea.constants import G_CURVES, IMPACT_BANDS_HZ
+from impactosea.constants import (
+    CONCRETE_SLAB_DENSITY_KG_M3,
+    CONCRETE_SLAB_POISSON_RATIO,
+    CONCRETE_SLAB_YOUNG_MODULUS_PA,
+    G_CURVES,
+    IMPACT_BANDS_HZ,
+)
 from impactosea.engine import (
     calculate_scenario,
     classify_band_g,
     contact_cutoff_hz,
     equivalent_cubic_room_project,
+    estimate_original_contact_time,
     validate_h3_case,
 )
 from impactosea.models import ProjectInput
@@ -67,6 +74,60 @@ class EngineTest(unittest.TestCase):
     def test_equivalent_room_h3_defaults(self) -> None:
         project = equivalent_cubic_room_project()
         self.assertAlmostEqual(project.room_volume_m3, 15.0)
+
+    def test_estimated_contact_time_feeds_project_and_keeps_diagnostic_separate(self) -> None:
+        estimate = estimate_original_contact_time(
+            impact_mass_kg=15.0,
+            drop_height_m=0.5,
+            room_width_m=2.58,
+            room_length_m=2.62,
+            slab_thickness_m=0.25,
+        )
+        project = ProjectInput(
+            impact_mass_kg=15.0,
+            drop_height_m=0.5,
+            room_width_m=2.58,
+            room_length_m=2.62,
+            room_height_m=3.24,
+            reverberation_time_s=0.5,
+            slab_thickness_m=0.25,
+            slab_density_kg_m3=CONCRETE_SLAB_DENSITY_KG_M3,
+            young_modulus_pa=CONCRETE_SLAB_YOUNG_MODULUS_PA,
+            poisson_ratio=CONCRETE_SLAB_POISSON_RATIO,
+            tc_original_ms=estimate.tc_calibrated_ms,
+        )
+        solution = load_solutions()[1]
+        result = calculate_scenario(project, solution, target_g=25)
+
+        self.assertGreaterEqual(estimate.tc_calibrated_ms, 2.0)
+        self.assertLessEqual(estimate.tc_calibrated_ms, 7.0)
+        self.assertAlmostEqual(project.tc_original_ms, estimate.tc_calibrated_ms)
+        self.assertNotAlmostEqual(estimate.tc_mechanical_ms, project.tc_original_ms)
+        self.assertGreater(result.global_lmax_original_db, result.global_lmax_mitigated_db)
+
+    def test_thicker_concrete_slab_increases_panel_frequency(self) -> None:
+        thin = estimate_original_contact_time(
+            impact_mass_kg=15.0,
+            drop_height_m=0.5,
+            room_width_m=2.58,
+            room_length_m=2.62,
+            slab_thickness_m=0.20,
+        )
+        thick = estimate_original_contact_time(
+            impact_mass_kg=15.0,
+            drop_height_m=0.5,
+            room_width_m=2.58,
+            room_length_m=2.62,
+            slab_thickness_m=0.30,
+        )
+
+        self.assertGreater(thick.panel_frequency_hz, thin.panel_frequency_hz)
+        self.assertLess(thick.tc_calibrated_ms, thin.tc_calibrated_ms)
+
+    def test_concrete_slab_constants_are_fixed_defaults(self) -> None:
+        self.assertEqual(CONCRETE_SLAB_DENSITY_KG_M3, 2400.0)
+        self.assertEqual(CONCRETE_SLAB_YOUNG_MODULUS_PA, 30e9)
+        self.assertEqual(CONCRETE_SLAB_POISSON_RATIO, 0.20)
 
 
 if __name__ == "__main__":

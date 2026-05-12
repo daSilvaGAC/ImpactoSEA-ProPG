@@ -45,6 +45,18 @@ class ProjectInput:
 
 
 @dataclass(frozen=True)
+class ContactTimeEstimate:
+    tc_calibrated_ms: float
+    tc_mechanical_ms: float
+    fc_calibrated_hz: float
+    fc_mechanical_hz: float
+    panel_frequency_hz: float
+    source_factor: float
+    mechanical_contact_stiffness_n_m: float
+    warnings: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
 class FeasibilityInput:
     intended_use: str
     sensitive_receptor: str

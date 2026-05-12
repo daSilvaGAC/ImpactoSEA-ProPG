@@ -5,8 +5,21 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Sequence
 
-from .constants import G_CURVES, H3_VALIDATION_BANDS_HZ, IMPACT_BANDS_HZ
-from .models import BandResult, MitigationSolution, ProjectInput, ScenarioResult
+from .constants import (
+    CONCRETE_SLAB_DENSITY_KG_M3,
+    CONCRETE_SLAB_POISSON_RATIO,
+    CONCRETE_SLAB_YOUNG_MODULUS_PA,
+    G_CURVES,
+    H3_VALIDATION_BANDS_HZ,
+    IMPACT_BANDS_HZ,
+)
+from .models import (
+    BandResult,
+    ContactTimeEstimate,
+    MitigationSolution,
+    ProjectInput,
+    ScenarioResult,
+)
 
 FLOAT_TINY = 2.2250738585072014e-308
 
@@ -81,6 +94,82 @@ def _validate_positive(values: dict[str, float]) -> None:
     for name, value in values.items():
         if value <= 0:
             raise ValueError(f"{name} must be greater than zero.")
+
+
+def estimate_original_contact_time(
+    *,
+    impact_mass_kg: float,
+    drop_height_m: float,
+    room_width_m: float,
+    room_length_m: float,
+    slab_thickness_m: float,
+    slab_density_kg_m3: float = CONCRETE_SLAB_DENSITY_KG_M3,
+    young_modulus_pa: float = CONCRETE_SLAB_YOUNG_MODULUS_PA,
+    poisson_ratio: float = CONCRETE_SLAB_POISSON_RATIO,
+    contact_radius_m: float = 0.05,
+    min_tc_ms: float = 2.0,
+    max_tc_ms: float = 7.0,
+) -> ContactTimeEstimate:
+    _validate_positive(
+        {
+            "impact_mass_kg": impact_mass_kg,
+            "drop_height_m": drop_height_m,
+            "room_width_m": room_width_m,
+            "room_length_m": room_length_m,
+            "slab_thickness_m": slab_thickness_m,
+            "slab_density_kg_m3": slab_density_kg_m3,
+            "young_modulus_pa": young_modulus_pa,
+            "contact_radius_m": contact_radius_m,
+            "min_tc_ms": min_tc_ms,
+            "max_tc_ms": max_tc_ms,
+        }
+    )
+    if min_tc_ms >= max_tc_ms:
+        raise ValueError("min_tc_ms must be lower than max_tc_ms.")
+    if not -0.45 < poisson_ratio < 0.5:
+        raise ValueError("poisson_ratio must be between -0.45 and 0.5.")
+
+    bending_stiffness = (
+        young_modulus_pa * slab_thickness_m**3 / (12 * (1 - poisson_ratio**2))
+    )
+    panel_frequency_hz = (
+        math.pi
+        / 2
+        * math.sqrt(bending_stiffness / (slab_density_kg_m3 * slab_thickness_m))
+        * (1 / room_width_m**2 + 1 / room_length_m**2)
+    )
+
+    impact_velocity = math.sqrt(2 * 9.81 * drop_height_m)
+    reference_velocity = math.sqrt(2 * 9.81 * 0.5)
+    source_factor = (impact_mass_kg / 15.0) ** 0.40 * (
+        impact_velocity / reference_velocity
+    ) ** -0.20
+
+    raw_calibrated_tc_ms = 1000 / (2 * panel_frequency_hz) * source_factor
+    tc_calibrated_ms = min(max(raw_calibrated_tc_ms, min_tc_ms), max_tc_ms)
+
+    mechanical_stiffness = (2 * contact_radius_m * young_modulus_pa) / (
+        1 - poisson_ratio**2
+    )
+    tc_mechanical_ms = math.pi * math.sqrt(impact_mass_kg / mechanical_stiffness) * 1000
+
+    warnings: list[str] = []
+    if tc_calibrated_ms != raw_calibrated_tc_ms:
+        limit = "mínimo" if tc_calibrated_ms == min_tc_ms else "máximo"
+        warnings.append(f"Tc calibrado limitado ao {limit} de triagem.")
+    if tc_mechanical_ms < min_tc_ms:
+        warnings.append("Tc mecânico rígido abaixo da faixa de triagem; usar apenas como diagnóstico.")
+
+    return ContactTimeEstimate(
+        tc_calibrated_ms=tc_calibrated_ms,
+        tc_mechanical_ms=tc_mechanical_ms,
+        fc_calibrated_hz=contact_cutoff_hz(tc_calibrated_ms / 1000),
+        fc_mechanical_hz=contact_cutoff_hz(tc_mechanical_ms / 1000),
+        panel_frequency_hz=panel_frequency_hz,
+        source_factor=source_factor,
+        mechanical_contact_stiffness_n_m=mechanical_stiffness,
+        warnings=tuple(warnings),
+    )
 
 
 def sea_engine_lmax(

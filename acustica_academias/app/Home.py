@@ -13,15 +13,19 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from impactosea import (  # noqa: E402
+    CONCRETE_SLAB_DENSITY_KG_M3,
+    CONCRETE_SLAB_POISSON_RATIO,
+    CONCRETE_SLAB_YOUNG_MODULUS_PA,
     FeasibilityInput,
     ProjectInput,
     assess_feasibility,
     build_ads_markdown,
     calculate_scenario,
+    estimate_original_contact_time,
     load_solutions,
 )
 from impactosea.constants import G_CURVES, IMPACT_BANDS_HZ, TARGET_G_OPTIONS  # noqa: E402
-from impactosea.engine import scenario_to_records, validate_h3_case  # noqa: E402
+from impactosea.engine import contact_cutoff_hz, scenario_to_records, validate_h3_case  # noqa: E402
 
 
 st.set_page_config(
@@ -202,13 +206,19 @@ with tab_stage1:
 with tab_stage2:
     st.subheader("Modelagem e Predição")
     st.markdown("#### Fonte de impacto")
-    impact_col1, impact_col2, impact_col3 = st.columns(3)
+    impact_col1, impact_col2 = st.columns(2)
     with impact_col1:
         impact_mass_kg = st.number_input("Massa [kg]", min_value=1.0, max_value=200.0, value=15.0, step=1.0)
     with impact_col2:
         drop_height_m = st.number_input("Altura de queda [m]", min_value=0.05, max_value=2.0, value=0.5, step=0.05)
-    with impact_col3:
-        tc_original_ms = st.number_input("Tc original [ms]", min_value=0.5, max_value=30.0, value=3.0, step=0.5)
+    with st.expander("Diagnóstico de contato rígido", expanded=False):
+        contact_radius_mm = st.number_input(
+            "Raio efetivo de contato [mm]",
+            min_value=5.0,
+            max_value=200.0,
+            value=50.0,
+            step=5.0,
+        )
 
     st.markdown("#### Sala receptora")
     room_col1, room_col2, room_col3, room_col4 = st.columns(4)
@@ -225,12 +235,9 @@ with tab_stage2:
     slab_col1, slab_col2, slab_col3, slab_col4 = st.columns(4)
     with slab_col1:
         slab_thickness_mm = st.number_input("Espessura [mm]", min_value=80.0, max_value=600.0, value=250.0, step=10.0)
-    with slab_col2:
-        slab_density_kg_m3 = st.number_input("Densidade [kg/m³]", min_value=1500.0, max_value=3000.0, value=2400.0, step=50.0)
-    with slab_col3:
-        young_modulus_gpa = st.number_input("Módulo de Young [GPa]", min_value=5.0, max_value=60.0, value=30.0, step=1.0)
-    with slab_col4:
-        poisson_ratio = st.number_input("Poisson", min_value=0.05, max_value=0.45, value=0.20, step=0.01)
+    slab_col2.metric("Densidade fixa", f"{CONCRETE_SLAB_DENSITY_KG_M3:.0f} kg/m³")
+    slab_col3.metric("Módulo de Young fixo", f"{CONCRETE_SLAB_YOUNG_MODULUS_PA / 1e9:.0f} GPa")
+    slab_col4.metric("Poisson fixo", f"{CONCRETE_SLAB_POISSON_RATIO:.2f}")
 
     st.markdown("#### Parâmetros da solução selecionada")
     sol_col1, sol_col2, sol_col3, sol_col4 = st.columns(4)
@@ -242,21 +249,58 @@ with tab_stage2:
         for layer in solution.layers:
             st.write(f"- {layer.material}: {layer.thickness_mm:g} mm ({layer.role})")
 
-project = ProjectInput(
-    impact_mass_kg=impact_mass_kg,
-    drop_height_m=drop_height_m,
-    room_width_m=room_width_m,
-    room_length_m=room_length_m,
-    room_height_m=room_height_m,
-    reverberation_time_s=reverberation_time_s,
-    slab_thickness_m=slab_thickness_mm / 1000.0,
-    slab_density_kg_m3=slab_density_kg_m3,
-    young_modulus_pa=young_modulus_gpa * 1e9,
-    poisson_ratio=poisson_ratio,
-    tc_original_ms=tc_original_ms,
-)
-result = calculate_scenario(project, solution, target_g=target_g, bands_hz=IMPACT_BANDS_HZ)
-result_df = pd.DataFrame(scenario_to_records(result))
+    contact_estimate = estimate_original_contact_time(
+        impact_mass_kg=impact_mass_kg,
+        drop_height_m=drop_height_m,
+        room_width_m=room_width_m,
+        room_length_m=room_length_m,
+        slab_thickness_m=slab_thickness_mm / 1000.0,
+        contact_radius_m=contact_radius_mm / 1000.0,
+    )
+
+    project = ProjectInput(
+        impact_mass_kg=impact_mass_kg,
+        drop_height_m=drop_height_m,
+        room_width_m=room_width_m,
+        room_length_m=room_length_m,
+        room_height_m=room_height_m,
+        reverberation_time_s=reverberation_time_s,
+        slab_thickness_m=slab_thickness_mm / 1000.0,
+        slab_density_kg_m3=CONCRETE_SLAB_DENSITY_KG_M3,
+        young_modulus_pa=CONCRETE_SLAB_YOUNG_MODULUS_PA,
+        poisson_ratio=CONCRETE_SLAB_POISSON_RATIO,
+        tc_original_ms=contact_estimate.tc_calibrated_ms,
+    )
+    result = calculate_scenario(project, solution, target_g=target_g, bands_hz=IMPACT_BANDS_HZ)
+    result_df = pd.DataFrame(scenario_to_records(result))
+
+    st.markdown("#### Tempo de contato calculado")
+    tc_col1, tc_col2, tc_col3, tc_col4, tc_col5 = st.columns(5)
+    tc_col1.metric("Tc original calculado", f"{contact_estimate.tc_calibrated_ms:.2f} ms")
+    tc_col2.metric("Tc mecânico diagnóstico", f"{contact_estimate.tc_mechanical_ms:.2f} ms")
+    tc_col3.metric("fc original", f"{contact_estimate.fc_calibrated_hz:.0f} Hz")
+    tc_col4.metric("Tc mitigado", f"{solution.tc_mitigated_ms:.2f} ms")
+    tc_col5.metric("fc mitigado", f"{contact_cutoff_hz(solution.tc_mitigated_s):.0f} Hz")
+
+    with st.expander("Detalhes do cálculo de Tc", expanded=False):
+        st.write(f"- Frequência preliminar da laje/painel: {contact_estimate.panel_frequency_hz:.1f} Hz")
+        st.write(f"- Fator da fonte de impacto: {contact_estimate.source_factor:.2f}")
+        st.write(
+            f"- Rigidez de contato rígido diagnóstica: "
+            f"{contact_estimate.mechanical_contact_stiffness_n_m:.2e} N/m"
+        )
+        if contact_estimate.warnings:
+            for warning in contact_estimate.warnings:
+                st.write(f"- {warning}")
+        else:
+            st.write("- Sem avisos adicionais de Tc.")
+
+    st.markdown("#### Resultados em tempo real")
+    st.altair_chart(build_chart(result_df, target_g), width="stretch")
+    st.caption(
+        "O gráfico usa o Tc original calculado automaticamente; o Tc mecânico é apenas diagnóstico."
+    )
+
 ads = build_ads_markdown(feasibility, assessment, project, solution, result)
 
 with tab_results:
