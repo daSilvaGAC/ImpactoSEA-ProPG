@@ -16,6 +16,10 @@ consolidacao em laudo ou memoria de calculo definitiva.
 
 ## Como rodar
 
+Versao fixada do Python: `3.12.10`. Se usar `pyenv`, `mise` ou ferramenta
+compativel, o arquivo `.python-version` ja seleciona essa versao dentro desta
+pasta.
+
 ```bash
 cd acustica_academias
 python -m venv .venv
